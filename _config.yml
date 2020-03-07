@@ -10,7 +10,7 @@ title: pandalanax
 #email: tomer.weller@gmail.com
 #description: "an indeterminate mass or shape"
 #baseurl: "" # the subpath of your site, e.g. /blog
-url: "http://blob.tomerweller.com" # the base hostname & protocol for your site
+url: "pandalanax.github.io"
 twitter_username: pandalanax
 github_username:  pandalanax
 permalink: /:title
