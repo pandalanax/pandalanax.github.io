@@ -7,7 +7,7 @@
 
 # Site settings
 title: pandalanax 
-#email: tomer.weller@gmail.com
+#email: ""
 #description: "an indeterminate mass or shape"
 #baseurl: "" # the subpath of your site, e.g. /blog
 url: "pandalanax.github.io"
@@ -20,9 +20,7 @@ markdown: kramdown
 
 owner:
 #  name:           
-#  avatar:         /assets/avatar.jpg
-##  email:          tomer.weller@gmail.com
-  # Social networking links used in footer. Update and remove as you like.
-  twitter: pandalanax
-  github: pandalanax
+# Social networking links used in footer. Update and remove as you like.
+twitter: pandalanax
+github: pandalanax
 
