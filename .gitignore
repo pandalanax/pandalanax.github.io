@@ -5,4 +5,4 @@ _site
 .DS_Store
 Gemfile
 Gemfile.lock
-.jekyll-cache
+.jekyll-cache/

@@ -1,3 +1,0 @@
-I"/<p>This post describes, step by step, how to setup a workflow for importing [React][React] components from <a href="https://www.npmjs.com/">NPM</a>, using <a href="https://webpack.github.io/">Webpack</a>, and incorporate them in your <a href="https://reagent-project.github.io/">Reagent</a> views.</p>
-
-:ET

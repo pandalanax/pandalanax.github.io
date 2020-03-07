@@ -1,3 +1,0 @@
-I"�<p>Facebook are <a href="http://blog.parse.com/announcements/moving-on/">closing down Parse</a> and it seems that the developer community is thrilled. After all, they’re letting it die slowly and open-sourcing a parse compatible server. And what if they hadn’t been so nice? Have we gotten to a point where our applications depend on the generosity of 3rd party service providers? Yes. We use gmaps for mapping, Facebook for authentication, Amazon S3 for storage and much more. Some choices are almost unavoidable and some are worth the risk and/or saved resources. However, depending on 3rd party services has become the norm rather than a conscious decision.</p>
-
-:ET
