@@ -1,0 +1,166 @@
+I"%<p>This post describes my first steps with ESP32. It was originally written as preparation for TA’ing communications week in MIT’s <a href="http://fab.cba.mit.edu/classes/863.16/">fabclass</a>. I cover basic setup, firmware deployment and a hint of benchmarking.</p>
+
+<p><em>Warning: This post was written in November 2016. ESP32 is brand spanking new and should be considered a moving target</em>.</p>
+
+<p><strong>Cdsadsadsaontents:</strong></p>
+
+<ul>
+  <li><a href="#what-is-the-esp32">What is the ESP32?</a></li>
+  <li><a href="#hardware-setup">Hardware Setup</a>
+    <ul>
+      <li><a href="#equipment-used">Equipment Used</a></li>
+      <li><a href="#basic-connectivity">Basic Connectivity</a></li>
+      <li><a href="#sanity-check">Sanity Check</a></li>
+    </ul>
+  </li>
+  <li><a href="#programming">Programming</a>
+    <ul>
+      <li><a href="#freertos">FreeRTOS</a></li>
+      <li><a href="#esp---idf">ESP - IDF</a></li>
+      <li><a href="#esp32-arduino-core">ESP32 ARDUINO CORE</a></li>
+    </ul>
+  </li>
+  <li><a href="#ring-oscillator-benchmark">Ring Oscillator benchmark</a></li>
+  <li><a href="#more-resources">More Resources</a></li>
+</ul>
+
+<h3 id="what-is-the-esp32">What is the ESP32?</h3>
+
+<p>ESP32, successor to the beloved ESP8266, is system on a chip (SoC) that can do (almost) anything:</p>
+
+<ul>
+  <li>Real concurrency with two cores</li>
+  <li>WIFI</li>
+  <li>Bluetooth</li>
+  <li>BLE</li>
+  <li><a href="https://espressif.com/en/products/hardware/esp32/overview">Much more</a></li>
+</ul>
+
+<p><img src="/assets/esp32/esp32-arch.jpg" alt="esp32-arch" /></p>
+
+<p>Espressif, the manufacturer, have been kind enough to send some units of their new ESP32 modules for evaluation. (huge thanks to John Lee <a href="https://twitter.com/EspressifSystem">@EspressifSystem</a>) I will demonstrate basic connectivity, different ways to program it, and basic benchmarking.</p>
+
+<h3 id="hardware-setup">Hardware Setup</h3>
+
+<h4 id="equipment-used">Equipment Used</h4>
+
+<ul>
+  <li><a href="https://espressif.com/en/producttype/esp-wroom-32"><strong>ESP32 WROOM32</strong></a> module. This is Espressif’s own ESP32 module. It’s safe to assume that we’ll see ESP32 used in modules from 3rd party manufacturers in the near future (AI was the lead module manufacturer for the ESP8266).</li>
+  <li><strong>ESP32 Breakout</strong> board. Espressif provided us with <a href="/assets/esp32/esp32-breakout.png">simple breakout boards</a> that expose all I/O pins and physical buttons for RESET and BOOT MODE.
+There are other boards available to order as well as designs to <a href="https://github.com/a2retro/ESP32_Miscellany">mill your own</a>.</li>
+  <li><strong>FTDI Cable</strong></li>
+  <li><strong>3.3V Power Supply</strong> (up to 500mA). DO NOT USE THE FTDI POWER - IT CAN’T PROVIDE ENOUGH CURRENT. (TRUST ME - I’VE TRIED)</li>
+</ul>
+
+<p><em>Note: soldering the module to the breakout board proved non-trivial, the ground plane is very large so a high wattage soldering iron is recommended for soldering the ground pads.</em></p>
+
+<h4 id="basic-connectivity">Basic Connectivity</h4>
+
+<p><img src="/assets/esp32/esp32-pinout.png" alt="esp32-pinout" /></p>
+
+<ul>
+  <li>VCC (ESP32) -&gt; 3.3V (POWER)</li>
+  <li>GND (ESP32) -&gt; GND (POWER)</li>
+  <li>GND (ESP32) -&gt; GND (FTDI)</li>
+  <li>TX (ESP32) -&gt; RX (FTDI)</li>
+  <li>RX (ESP32) -&gt; TX (FTDI)</li>
+</ul>
+
+<p><img src="/assets/esp32/esp32-basic-connectivity.png" alt="esp32-pinout" /></p>
+
+<h4 id="sanity-check">Sanity Check</h4>
+
+<ol>
+  <li>Open a terminal emulator on the FTDI port with a BAUD rate of 115200</li>
+  <li>Hit the RESET button</li>
+</ol>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">⇒  miniterm.py /dev/tty.usbserial-XXXXXXXX 115200
+ets Jun  8 2016 00:22:57
+rst:0x1 <span class="o">(</span>POWERON_RESET<span class="o">)</span>,boot:0x13 <span class="o">(</span>SPI_FAST_FLASH_BOOT<span class="o">)</span>
+....
+IDF version : master<span class="o">(</span>db93bceb<span class="o">)</span>
+WIFI LIB version : master<span class="o">(</span>934d079b<span class="o">)</span>
+ssc version : master<span class="o">(</span>r283 4d376412<span class="o">)</span>
+<span class="o">!!!</span>ready!!!
+mode : softAP<span class="o">(</span>26:0a:c4:00:27:f4<span class="o">)</span>
+dhcp server start:<span class="o">(</span>ip: 192.168.4.1, mask: 255.255.255.0, gw: 192.168.4.1<span class="o">)</span>
++WIFI:AP_START</code></pre></figure>
+
+<p>Not only does it work, it even defaults to opening a public access point</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">⇒  airport <span class="nt">-s</span> | <span class="nb">grep </span>ESP
+ESP_0027F4 26:0a:c4:00:27:f4 <span class="nt">-14</span>  1,+1    Y  <span class="nt">--</span> NONE
+When a device enters the network:
+n:1 0, o:1 0, ap:1 1, sta:255 255, prof:1
+add 1
+station: 80:e6:50:27:b6:62 <span class="nb">join</span>, AID <span class="o">=</span> 1, g, 20
++SOFTAP:STACONNECTED,80:e6:50:27:b6:62</code></pre></figure>
+
+<p>I couldn’t find any other interesting things in the provided firmware.
+In case you were wondering, like me, whether ESP8266’s <a href="https://www.itead.cc/wiki/ESP8266_Serial_WIFI_Module">AT command-set</a> works in this prompt, the answer is no. It’s not very clear what commands do work here. (If you know of some, leave them in the comments below)</p>
+
+<h3 id="programming">Programming</h3>
+
+<h4 id="freertos">FreeRTOS</h4>
+
+<p>Before programming this chip it’s crucial to understand that, unlike other embedded systems, the ESP32 comes with a light operating system - <a href="http://www.freertos.org/">FreeRTOS</a>. The following methods to program this chip don’t replace the FreeRTOS firmware, but rather deploy applications for it to run. I imagine that in the near future we’ll see other operating systems or no-os approaches for reprogramming these chips.</p>
+
+<p>There are currently two methods to program the ESP32: the ESP-IDF and the ESP32 arduino Core.</p>
+
+<h4 id="esp---idf">ESP - IDF</h4>
+
+<p><a href="https://github.com/espressif/esp-idf">Espressif IoT Development Framework</a> is a set of open source libraries and tools to facilitate deployment of apps to ESP32s FreeRTOS.</p>
+
+<p><a href="https://github.com/tomerweller/esp32-rtos-webclient">Code Example : HTTP GET request using the ESP IDF</a></p>
+
+<h4 id="esp32-arduino-core">ESP32 ARDUINO CORE</h4>
+
+<p>Espressif have also been hard at work to get the maker community happy and makers love Arduino. The <a href="https://github.com/espressif/arduino-esp32">ESP32 arduino core</a> integrates ESP-IDF deeply into the arduino tools. This includes providing a WiFi API that is almost 100% compatible with existing wifi shields for arduino.</p>
+
+<p><a href="https://github.com/tomerweller/esp32-arduino-webclient">Code Example : HTTP GET request using the ESP32 Arduino Core</a></p>
+
+<p><em>Note: currently, to take advantage of the concurrency capabilities - IDF is the way to go.</em></p>
+
+<h3 id="ring-oscillator-benchmark">Ring Oscillator benchmark</h3>
+<p>Ring oscillator tests measure the minimal amount of time it takes for a signal to get out of a chip and back through peripherals.</p>
+
+<p>In practice, it means shorting two pins with a jumper, defining one as input and the other as output, and then writing and reading as fast as possible. The result is recorded with an oscilloscope connected to the shortened pins and ground.</p>
+
+<p>Here, I measure both programming methods mentioned earlier:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: center">FreeRTOS <a href="https://gist.github.com/tomerweller/7f9f202858cb064c84722c72f6c20aee">(code)</a></th>
+      <th style="text-align: center">Arduino Core <a href="https://gist.github.com/tomerweller/e50403bb18dcb6932d54e8f11edf0734">(code)</a></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: center"><img src="/assets/esp32/esp32-ro-freertos.jpg" alt="rtos-ro" />1.63MHz</td>
+      <td style="text-align: center"><img src="/assets/esp32/esp32-ro-core.jpg" alt="core-ro" />1.05MHz</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Conclusion:</strong> the Arduino program is about 35% slower than the lower level FreeRTOS program. However, usually in these type of tests, the portability of arduino code comes with a much bigger performance drop. Good job, Espressif!</p>
+
+<p><em>Note: These tests only occupy one core. The second core is free to perform other tasks, such as networking. <a href="https://github.com/tomerweller/esp32-rtos-webclient/tree/with-ring-oscillator">Example</a>.</em></p>
+
+<h3 id="more-resources">More Resources</h3>
+<ul>
+  <li><a href="https://espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf">ESP32 Data Sheet</a></li>
+  <li><a href="https://espressif.com/sites/default/files/documentation/esp_wroom_32_datasheet_en.pdf">ESP-WROOM32 Data Sheet</a></li>
+  <li><a href="http://www.esp32.com/">ESP32 official forum</a></li>
+  <li><a href="http://hackaday.com/2016/10/04/how-to-get-started-with-the-esp32">ESP32 Getting started (hackaday)</a></li>
+</ul>
+
+<h3 id="thanks">Thanks:</h3>
+<ul>
+  <li><a href="https://twitter.com/EspressifSystem">John Lee</a> and espressif for providing the hardware.</li>
+  <li><a href="https://twitter.com/achituv">Tal Achituv</a> for help with soldering and the oscilloscope.</li>
+  <li><a href="http://jonathanbobrow.com/">Jonathan Bobrow</a> for feedback on this post.</li>
+</ul>
+
+:ET

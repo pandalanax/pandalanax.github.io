@@ -1,0 +1,75 @@
+I"�<h6 id="note-a-previous-version-of-this-post-had-some-licensing-terminology-issues-this-post-discusses-free-software">Note: a previous version of this post had some licensing terminology issues. This post discusses Free software.</h6>
+
+<p>Last Sunday the Media Lab hosted a Public Dialogue on DRM and the future of the Web. Amongst the speakers was <a href="https://stallman.org/">Richard Stallman</a> (aka <strong>RMS</strong>), founder of the Free Software Foundation.  Although there was a lot of interest in the event from outside of the media lab, it couldn’t be streamed with MIT’s setup even though it was being filmed. MIT’s video streaming service is proprietary and Stallman will not use, or even take part in using, software that is not <em>completely</em> free.</p>
+
+<p><img src="/assets/free-streaming/the-panel.jpg" alt="The Panel" title="this is a title" />
+<small>Richard Stallman, Danny O’Brien, Joi Ito, and Harry Halpin. Photo: Jon Christian</small></p>
+
+<p>Earlier that day, during a lunch hosted by <a href="http://joi.ito.com/">Joi Ito</a>, Tal Achituv and myself toyed with the idea of deploying a WebRTC based solution that is free and will be approved by RMS. After doing some research, it seemed that there are indeed free WebRTC options for broadcasting. Now, a couple of hours before the panel, we decided to go for it.</p>
+
+<p>This resulted in two hours of hectic coding, setup and equipment search.</p>
+
+<h3 id="the-setup">The Setup:</h3>
+
+<p><img src="/assets/free-streaming/the-setup.jpg" alt="The Setup" />
+<small>Photo: Tal Achituv</small></p>
+
+<p><img src="/assets/free-streaming/block-diagram.png" alt="Block Diagram" />
+<small>Making this diagram took more time than building a free streaming solution<small></small></small></p>
+
+<h4 id="media-server">Media Server</h4>
+<p><a href="http://www.kurento.org/">Kurento</a> (LGPL-2.1) is a free media server. It implements the WebRTC spec and uses <a href="https://gstreamer.freedesktop.org/">GStreamer</a> under the hood for any multimedia processing. In this case we used Kurento as a broadcasting server: it received one WebRTC AV stream from a presenter (the video capturing laptop) and retransmitted it via multiple WebRTC streams to viewers.</p>
+
+<p>We ran Kurento on a Linux VM on my laptop. The intention was to test on a VM and then deploy to some cloud service. However, due to lack of time, the debug setup became the production one.</p>
+
+<p>Notes:</p>
+
+<ul>
+  <li>After the Stream ended I realized that the VM had exactly 1 core and 1GB of RAM allocated to it. Handled perfectly.</li>
+  <li>If working from behind a NAT you might also need to setup a <a href="https://en.wikipedia.org/wiki/Traversal_Using_Relays_around_NAT">TURN</a> and/or <a href="https://en.wikipedia.org/wiki/STUN">STUN</a> servers. Fortunately, the Media Lab’s wired network allocates a public IP to any wired device so the VM used a bridged network and we didn’t have to worry about that.</li>
+  <li>I later found out that there are some <a href="https://github.com/Kurento/kurento-docker">kurento dockerfiles</a> out there for quick containerized deployment of Kurento.</li>
+</ul>
+
+<h4 id="signaling-server">Signaling Server</h4>
+
+<p>The signaling server is responsible for serving static assets and connecting the clients with the Media server via WebSockets. Our Node.js server was based on Kurento’s <a href="http://www.kurento.org/docs/6.1.1/tutorials/node/tutorial-3-one2many.html">one-to-many video call tutorial</a> and ran on my laptop.
+When I say <em>based</em> I mean completely <em>copied</em>. The only change we made was to separate the presenter page from the viewing page and completely remove everything besides the video container on the viewer page. <a href="https://github.com/tomerweller/ml-open-stream">here’s the code.</a></p>
+
+<p><img src="/assets/free-streaming/view-screenshot.jpg" alt="Viewer" />
+<img src="/assets/free-streaming/view-screenshot2.jpg" alt="Viewer" />
+<small>Screenshots of the live viewing page. Notice the change in the favicon.</small></p>
+
+<p>Notes:</p>
+
+<ul>
+  <li>The fun thing about serving files directly from your computer is that you can hot swap them. We were tweaking the viewing experience during the stream, including changing the favicon and various css fixes.</li>
+  <li>To avoid exposing my personal laptop (signaling was running directly on my computer, not on a VM) we used the <a href="https://github.com/inconshreveable/ngrok">ngrok</a> tunneling service.</li>
+</ul>
+
+<p><img src="/assets/free-streaming/terminal.png" alt="Terminal" />
+<small>left: ngrok with 5 open connection. right: printout from the signaling server.</small></p>
+
+<h4 id="video-capturing">Video Capturing</h4>
+<p><a href="https://twitter.com/achituv">Tal</a> managed to find a cheap video capture card in the lab (something <a href="http://usefullinkage.blogspot.com/2007/09/video-capture-card-sale-penny-vidful.html">like this</a>) and a laptop that would actually work with it (ours didn’t). We used Firefox to connect to our presenter endpoint which handled the WebRTC handshake with the Media server.</p>
+
+<p>Notes:</p>
+
+<ul>
+  <li>Halfway through the stream I realized that there was no audio feed connected to the capture card and that we’re actually using the laptop’s microphone. Surprisingly, the sound was fairly good.</li>
+  <li>Of course, it’s far from being a secure solution - anyone could connect to that endpoint and serve as a presenter.</li>
+</ul>
+
+<h3 id="results">Results</h3>
+<p>We had a peak of 37 concurrent streams and averaged around 12. Due to time constraints and because the panel was actually quite interesting we didn’t have any continuous monitoring or collected information about load but it sure felt like we could handle a lot more. The machine was responsive (even the VM) throughout the session and I’m still amazed that a tiny VM with no optimizations handled it. KUDOS to <a href="http://www.kurento.org/">Kurento</a>.</p>
+
+<h3 id="some-take-aways">Some take aways</h3>
+
+<ol>
+  <li><strong>When you wait until the last possible minute to do something, it will take exactly one minute.</strong> (<a href="https://en.wikipedia.org/wiki/Parkinson%27s_law">Parkinson’s Law</a>). If we had decided to do this a week before then it would have taken a week. Of course, the client would be more polished and performance would be tested. But who cares? Sometimes good enough is good enough.</li>
+  <li><strong>There’s a tool for that.</strong> I always thought that setting up live streaming is a lengthy, non-trivial task. We live in an amazing time where the tools are just there and the only thing that limits us is our perspective.</li>
+  <li><strong>You are a server.</strong> In the early days of the internet it was clear that all nodes in the network are created equal. Anyone can consume services and anyone can provide services, whether it’s a Web page or an IRC node. The differentiation between a server and a client is a networking protocol technicality. There is no reason why a node can’t serve both as a client and a server. However, with massive data centers, Cloud computing and NAT, we’ve adopted a model of complete separation, our personal machines are clients and those behind some abstract cloud are servers. Serving anything from your machine, not just for debugging purposes, is part of the spirit of the internet. We should build tools that allow it (thanks <a href="https://github.com/inconshreveable/ngrok">ngrok</a>!) and services that take advantage of it.</li>
+</ol>
+
+<p>Thank you <a href="https://twitter.com/achituv">Tal Achituv</a> for reminding me all of the above.</p>
+
+:ET

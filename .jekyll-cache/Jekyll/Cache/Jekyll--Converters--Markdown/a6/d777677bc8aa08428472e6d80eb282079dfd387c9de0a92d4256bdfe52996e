@@ -1,0 +1,180 @@
+I"RK<p>This post describes, step by step, how to setup a workflow for importing <a href="https://facebook.github.io/react/">React</a> components from <a href="https://www.npmjs.com/">NPM</a>, using <a href="https://webpack.github.io/">Webpack</a>, and incorporate them in your <a href="https://reagent-project.github.io/">Reagent</a> views.</p>
+
+<p><strong>UPDATE (June 17th, 2017): A year later, this post and method are very much still relevant. I’ve made a small update to take advantage of the <code class="highlighter-rouge">:foreign-libs</code> option, as suggested in the comments (Thanks Andreas and Alex!), which reduces the plumbing necessary.</strong></p>
+
+<h3 id="motivation">Motivation</h3>
+<p>Any Javascript developer using a modern build tool can easily test and incorporate React components from 3rd party developers in their app. It’s usually just a matter of declaring dependencies, building and importing.</p>
+
+<p>Moving to Clojurescript and Reagent has been amazing in many ways but I just couldn’t wrap my head around a comparable import flow.</p>
+
+<p>The workflow I will describe employs NPM as a dependency manager and Webpack as a build tool. The build artifact is added as an external Javascript dependency to an otherwise (pretty) standard Leinnnigen build process.</p>
+
+<p>This solution does not use Cljsjs in anyway.</p>
+
+<h3 id="why-not-cljsjs">Why not Cljsjs?</h3>
+<p><a href="http://cljsjs.github.io/">Cljsjs</a> is a great community effort to package common Javascript libraries in a Clojurescript friendly way. However, it has some shortcomings.</p>
+
+<ol>
+  <li>Very few packages compared to NPM or Bower. Whenever I look for something it’s usually not there.</li>
+  <li>Packages are mostly <a href="https://docs.google.com/spreadsheets/d/1t61hPgEfb1ukzezb6dn38z8kp07TsEFgkaVwF01-acE/pubhtml">out of date</a> compared to their NPM counterparts. This make sense because with NPM packages the author/maintainer of the library is the same person as the maintainer of the package. That’s not the case with Cljsjs.</li>
+  <li>Packaging a library is not trivial. The community’s usual reply to the import issue is “just package it yourself”. Sending someone who wants to fiddle around with a 3rd party react component, to package the dependency themselves is, in my opinion, cumbersome. This also leads back to problem #2.</li>
+</ol>
+
+<h3 id="zefstyle">Zefstyle</h3>
+
+<p>In this example we’ll start with a simple frontend-only Reagant app and setup a workflow that will allow us to add a <a href="https://www.npmjs.com/package/react-player">react-player</a> component to it. Let’s call this project <strong>Zefstyle</strong>. You can also skip this altogether and just jump to the finished result <a href="https://github.com/tomerweller/zefstyle">here</a>.</p>
+
+<p>Starting with a template:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="nv">$ </span>lein new reagent-frontend zefstyle <span class="o">&amp;&amp;</span> <span class="nb">cd </span>zefstyle</code></pre></figure>
+
+<p>For sanity - Let’s see that it’s working</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="nv">$ </span>lein figwheel</code></pre></figure>
+
+<p>While that’s running, open public/index.html in your favorite browser. You should see a page that says “Welcome to Reagent”</p>
+
+<p>Since we’re running figwheel, we can change that live. In <code class="highlighter-rouge">public/index.html</code> change the header to “Zef Style” - You should see it updating within seconds. You can then close fihghweel for now.</p>
+
+<h3 id="npm-setup">NPM Setup</h3>
+<p>Let’s create a minimal <code class="highlighter-rouge">package.json</code> file. We can either do it interactively with <code class="highlighter-rouge">npm init</code> or just manually create a <code class="highlighter-rouge">package.json</code> file:</p>
+
+<figure class="highlight"><pre><code class="language-json" data-lang="json"><span class="p">{</span><span class="w">
+  </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"zefstyle"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"version"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0.0.2"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"author"</span><span class="p">:</span><span class="w"> </span><span class="s2">"tomer.weller@gmail.com"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"scripts"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"watch"</span><span class="p">:</span><span class="w"> </span><span class="s2">"webpack -d --watch"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"build"</span><span class="p">:</span><span class="w"> </span><span class="s2">"webpack -p"</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"dependencies"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"react"</span><span class="p">:</span><span class="w"> </span><span class="s2">"15.5.4"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"react-dom"</span><span class="p">:</span><span class="w"> </span><span class="s2">"15.5.4"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"webpack"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1.13.1"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"react-player"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0.18.0"</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span></code></pre></figure>
+
+<h4 id="packagejson-remarks">package.json remarks:</h4>
+<ul>
+  <li>We import <code class="highlighter-rouge">react</code> and <code class="highlighter-rouge">react-dom</code> although they are not a hard dependency of <code class="highlighter-rouge">react-player</code> and more than that - we already have a React instance in our code, the one that Reagant depends on. Why? There is an order of execution issue when relying on Reagant’s React dependency. This also means that we will later need to exclude Reagant’s React dependency so that we don’t have two React instances.</li>
+  <li>I’ve included some shortcuts for webpack scripts. They are not necessary but will come in handy.</li>
+</ul>
+
+<p>Install dependencies:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="nv">$ </span>npm <span class="nb">install</span></code></pre></figure>
+
+<p>All of our dependency tree should now be in the <code class="highlighter-rouge">node_modules</code> directory.</p>
+
+<p>An alternative approach to this step would be to use the <a href="https://github.com/RyanMcG/lein-npm">lein-npm</a> plugin. I’m pretty comfortable with npm so I decided to do it myself.</p>
+
+<h3 id="webpack-setup">Webpack setup</h3>
+<p>Our webpack setup will be pretty minimal - no fancy loaders. It consists of a definition file <code class="highlighter-rouge">webpack.config.js</code> and an entry script that bootstraps our imported libraries to the <code class="highlighter-rouge">window</code> object.</p>
+
+<p><code class="highlighter-rouge">webpack.config.js</code> :</p>
+
+<figure class="highlight"><pre><code class="language-javascript" data-lang="javascript"><span class="kd">const</span> <span class="nx">webpack</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="dl">'</span><span class="s1">webpack</span><span class="dl">'</span><span class="p">);</span>
+<span class="kd">const</span> <span class="nx">path</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="dl">'</span><span class="s1">path</span><span class="dl">'</span><span class="p">);</span>
+
+<span class="kd">const</span> <span class="nx">BUILD_DIR</span> <span class="o">=</span> <span class="nx">path</span><span class="p">.</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">__dirname</span><span class="p">,</span> <span class="dl">'</span><span class="s1">public</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">js</span><span class="dl">'</span><span class="p">);</span>
+<span class="kd">const</span> <span class="nx">APP_DIR</span> <span class="o">=</span> <span class="nx">path</span><span class="p">.</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">__dirname</span><span class="p">,</span> <span class="dl">'</span><span class="s1">src</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">js</span><span class="dl">'</span><span class="p">);</span>
+
+<span class="kd">const</span> <span class="nx">config</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="na">entry</span><span class="p">:</span> <span class="s2">`</span><span class="p">${</span><span class="nx">APP_DIR</span><span class="p">}</span><span class="s2">/main.js`</span><span class="p">,</span>
+  <span class="na">output</span><span class="p">:</span> <span class="p">{</span>
+    <span class="na">path</span><span class="p">:</span> <span class="nx">BUILD_DIR</span><span class="p">,</span>
+    <span class="na">filename</span><span class="p">:</span> <span class="dl">'</span><span class="s1">bundle.js</span><span class="dl">'</span>
+  <span class="p">},</span>
+<span class="p">};</span>
+
+<span class="nx">module</span><span class="p">.</span><span class="nx">exports</span> <span class="o">=</span> <span class="nx">config</span><span class="p">;</span></code></pre></figure>
+
+<p>We basically defined our entry point script as <code class="highlighter-rouge">src/js/main.js</code> and our output artifact as <code class="highlighter-rouge">public/js/bundle.js</code>.</p>
+
+<p>Our entry <code class="highlighter-rouge">src/js/main.js</code> should look something like:</p>
+
+<figure class="highlight"><pre><code class="language-javascript" data-lang="javascript"><span class="nb">window</span><span class="p">.</span><span class="nx">deps</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="dl">'</span><span class="s1">react</span><span class="dl">'</span> <span class="p">:</span> <span class="nx">require</span><span class="p">(</span><span class="dl">'</span><span class="s1">react</span><span class="dl">'</span><span class="p">),</span>
+    <span class="dl">'</span><span class="s1">react-dom</span><span class="dl">'</span> <span class="p">:</span> <span class="nx">require</span><span class="p">(</span><span class="dl">'</span><span class="s1">react-dom</span><span class="dl">'</span><span class="p">),</span>
+    <span class="dl">'</span><span class="s1">react-player</span><span class="dl">'</span> <span class="p">:</span> <span class="nx">require</span><span class="p">(</span><span class="dl">'</span><span class="s1">react-player</span><span class="dl">'</span><span class="p">),</span>
+<span class="p">};</span>
+
+<span class="nb">window</span><span class="p">.</span><span class="nx">React</span> <span class="o">=</span> <span class="nb">window</span><span class="p">.</span><span class="nx">deps</span><span class="p">[</span><span class="dl">'</span><span class="s1">react</span><span class="dl">'</span><span class="p">];</span>
+<span class="nb">window</span><span class="p">.</span><span class="nx">ReactDOM</span> <span class="o">=</span> <span class="nb">window</span><span class="p">.</span><span class="nx">deps</span><span class="p">[</span><span class="dl">'</span><span class="s1">react-dom</span><span class="dl">'</span><span class="p">];</span></code></pre></figure>
+
+<p>I usually prefer not to bind too many objects to the global window context, that’s why I push whatever I can into <code class="highlighter-rouge">window.deps</code>. With that said, <code class="highlighter-rouge">React</code> and <code class="highlighter-rouge">ReactDOM</code> must be on the global window context because that’s where components expect them to be.</p>
+
+<p>Now we can either run</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="nv">$ </span>npm run build </code></pre></figure>
+
+<p>For a onetime build, or:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="nv">$ </span>npm run watch</code></pre></figure>
+
+<p>For a continuous build that watches for changes in our code. Given that the Javascript code should remain pretty static the watch might be redundant.</p>
+
+<h3 id="leiningen-project-setup">Leiningen project setup</h3>
+<p>Like I mentioned before, we’re counting on webpack to bring React into the picture. That means that we need to get rid of the <code class="highlighter-rouge">cljsjs.react</code> &amp; <code class="highlighter-rouge">cljsjs.react.dom</code> packages that reagant depends on.</p>
+
+<p>In <code class="highlighter-rouge">project.clj</code> let’s change our dependencies to be:</p>
+
+<figure class="highlight"><pre><code class="language-clojure" data-lang="clojure"><span class="no">:dependencies</span><span class="w"> </span><span class="p">[[</span><span class="n">org.clojure/clojure</span><span class="w"> </span><span class="s">"1.8.0"</span><span class="w"> </span><span class="no">:scope</span><span class="w"> </span><span class="s">"provided"</span><span class="p">]</span><span class="w">
+             </span><span class="p">[</span><span class="n">org.clojure/clojurescript</span><span class="w"> </span><span class="s">"1.9.562"</span><span class="w"> </span><span class="no">:scope</span><span class="w"> </span><span class="s">"provided"</span><span class="p">]</span><span class="w">
+             </span><span class="p">[</span><span class="n">reagent</span><span class="w"> </span><span class="s">"0.6.2"</span><span class="w"> </span><span class="no">:exclusions</span><span class="w"> </span><span class="p">[</span><span class="n">cljsjs/react</span><span class="w"> </span><span class="n">cljsjs/react-dom</span><span class="p">]]]</span></code></pre></figure>
+
+<p>And add an external dependency to our webpack generated <code class="highlighter-rouge">bundle.js</code> through <code class="highlighter-rouge">:foreign-libs</code>. We need to add the following to all build profiles:</p>
+
+<figure class="highlight"><pre><code class="language-clojure" data-lang="clojure"><span class="no">:foreign-libs</span><span class="w"> </span><span class="p">[{</span><span class="no">:file</span><span class="w"> </span><span class="s">"public/js/bundle.js"</span><span class="w">
+                </span><span class="no">:provides</span><span class="w"> </span><span class="p">[</span><span class="s">"cljsjs.react"</span><span class="w"> </span><span class="s">"cljsjs.react.dom"</span><span class="w"> </span><span class="s">"webpack.bundle"</span><span class="p">]}]</span></code></pre></figure>
+
+<p>Notice how our foreign lib satisfies all react dependencies and also add a convenience namespace, <code class="highlighter-rouge">webpack.bundle</code>, for importing the external bundle.</p>
+
+<p>At this point it’s a good idea to cleanup and re-run figwheel.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="nv">$ </span>lein clean <span class="o">&amp;&amp;</span> lein figwheel</code></pre></figure>
+
+<h3 id="grand-finale">Grand finale</h3>
+
+<p>Now that we have everything in place we can add the react-player to our main Reagant view.</p>
+
+<p>in <code class="highlighter-rouge">src/zefstyle/core.cljs</code> let’s add the <code class="highlighter-rouge">webpack.bundle</code> dependency to our namespace:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="o">(</span>ns zefstyle.core
+  <span class="o">(</span>:require <span class="o">[</span>reagent.core :as reagent :refer <span class="o">[</span>atom]]
+            <span class="o">[</span>webpack.bundle]<span class="o">))</span></code></pre></figure>
+
+<p>and change our <code class="highlighter-rouge">home-page</code> function to be:</p>
+
+<figure class="highlight"><pre><code class="language-clojure" data-lang="clojure"><span class="p">(</span><span class="k">defn</span><span class="w"> </span><span class="n">home-page</span><span class="w"> </span><span class="p">[]</span><span class="w">
+  </span><span class="p">(</span><span class="k">let</span><span class="w"> </span><span class="p">[</span><span class="n">react-player</span><span class="w"> </span><span class="p">(</span><span class="nb">aget</span><span class="w"> </span><span class="n">js/window</span><span class="w"> </span><span class="s">"deps"</span><span class="w"> </span><span class="s">"react-player"</span><span class="p">)]</span><span class="w">
+    </span><span class="p">[</span><span class="no">:div</span><span class="w">
+     </span><span class="p">[</span><span class="no">:h2</span><span class="w"> </span><span class="s">"Zef Style"</span><span class="p">]</span><span class="w">
+     </span><span class="p">[</span><span class="no">:&gt;</span><span class="w"> </span><span class="n">react-player</span><span class="w"> </span><span class="p">{</span><span class="no">:url</span><span class="w"> </span><span class="s">"https://youtu.be/uMK0prafzw0"</span><span class="p">}]]))</span></code></pre></figure>
+
+<p>Notice the special <code class="highlighter-rouge">:&gt;</code> syntax for using pure React components.</p>
+
+<p>opening <code class="highlighter-rouge">public/index.html</code> should yield something like this: 
+<img src="/assets/zefstyle.png" alt="yolandi" /></p>
+
+<p><strong>Voila!</strong> We brought the pure JS <code class="highlighter-rouge">react-player</code> component into our Reagent view.</p>
+
+<p>To bring in new components we just need to declare them in <code class="highlighter-rouge">package.json</code>, <code class="highlighter-rouge">require()</code> them in main.js and rebuild.</p>
+
+<h3 id="caveats">Caveats:</h3>
+
+<ol>
+  <li>JS dependencies are not processed by the Closure compiler so they do not get advanced optimization, only whatever webpack is setup to do.</li>
+  <li>Setting up this process is not trivial. However, it only needs to be done once and from then on it’s a smooth sail. Also, automating the process or part of it sounds like a feasible task as part of a lein plugin. I’ll look into that when some time frees up.</li>
+</ol>
+
+<p>Let me know if this was helpful, requires some fixups or if it’s complete rubbish.</p>
+
+<h3 id="thanks-to">Thanks to:</h3>
+<ul>
+  <li><a href="https://twitter.com/trq__">Thariq Shihipar</a> for suggesting this approach although condemning the use of anything other than Javascript and React.</li>
+  <li><a href="https://www.reddit.com/r/clojurescript">/r/clojurescript</a>, <a href="https://clojurians.slack.com">Clojurians on Slack</a> and especially @sbmitchell for helping me troubleshoot.</li>
+</ul>
+
+:ET
